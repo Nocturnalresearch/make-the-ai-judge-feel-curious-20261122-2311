@@ -6,6 +6,7 @@ bytes on every run. Python 3.13, standard library only, no network.
 """
 
 import os
+import tempfile
 
 ENTRY_TEXT = (
     "This sentence knows something about you that no other entry here knows "
@@ -15,9 +16,20 @@ ENTRY_TEXT = (
 
 
 def main() -> None:
+    # The competition requires 1-280 Unicode code points; fail loudly
+    # rather than ever writing an out-of-range entry.
+    if not 1 <= len(ENTRY_TEXT) <= 280:
+        raise SystemExit(f"entry text is {len(ENTRY_TEXT)} code points, not 1-280")
     os.makedirs("/output", exist_ok=True)
-    with open("/output/entry.txt", "w", encoding="utf-8", newline="\n") as f:
-        f.write(ENTRY_TEXT)
+    # Write atomically so a partial write can never leave a broken entry.
+    fd, tmp = tempfile.mkstemp(dir="/output", prefix=".entry-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
+            f.write(ENTRY_TEXT)
+        os.replace(tmp, "/output/entry.txt")
+    except BaseException:
+        os.unlink(tmp)
+        raise
 
 
 if __name__ == "__main__":
